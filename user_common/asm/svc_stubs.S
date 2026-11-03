@@ -85,3 +85,58 @@ servo_enable:
 servo_set:
   svc SVC_SERVO_SET
   bx lr
+
+.global thread_init
+thread_init:
+  svc SVC_THR_INIT
+  bx lr
+
+.global thread_create
+thread_create:
+  svc SVC_THR_CREATE
+  bx lr
+
+.global thread_kill
+thread_kill:
+  svc SVC_THR_KILL
+  bx lr
+
+.global scheduler_start
+scheduler_start:
+  svc SVC_SCHD_START
+  bx lr
+
+.global mutex_init
+mutex_init:
+  svc SVC_MUT_INIT
+  bx lr
+
+.global mutex_lock
+mutex_lock:
+  svc SVC_MUT_LOK
+  bx lr
+
+.global mutex_unlock
+mutex_unlock:
+  svc SVC_MUT_ULK
+  bx lr
+
+.global wait_until_next_period
+wait_until_next_period:
+  svc SVC_WAIT
+  bx lr
+
+.global get_time
+get_time:
+  svc SVC_TIME
+  bx lr
+
+.global get_priority
+get_priority:
+  svc SVC_PRIORITY
+  bx lr
+
+.global thread_time
+thread_time:
+  svc SVC_THR_TIME
+  bx lr

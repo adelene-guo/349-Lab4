@@ -16,7 +16,7 @@
 #include <uart_polling.h>
 #include <nvic.h>
 #include <gpio.h>
-
+#include <arm.h>
 
 /** @brief Documents UNUSED. */
 #define UNUSED __attribute__((unused))
@@ -137,7 +137,7 @@ void uart_init(UNUSED int baud){
 int uart_put_byte(UNUSED char c){
   struct uart_reg_map *uart = UART2_BASE;
   int success = -1;
-  nvic_irq(UART2_IRQ, IRQ_DISABLE);
+  int state = save_interrupt_state_and_disable();
   if (!full(&uart_tx_buf)) {
     if (empty(&uart_tx_buf)) {
       uart->CR1 |= UART_CR1_TXEIE;
@@ -145,7 +145,7 @@ int uart_put_byte(UNUSED char c){
     push(&uart_tx_buf, c);
     success = 0;
   }
-  nvic_irq(UART2_IRQ, IRQ_ENABLE);
+  restore_interrupt_state(state);
   return success;
 }
 
@@ -153,6 +153,7 @@ int uart_put_byte(UNUSED char c){
 int uart_get_byte(UNUSED char *c){
   struct uart_reg_map *uart = UART2_BASE;
   int success = -1;
+  int state = save_interrupt_state_and_disable();
   nvic_irq(UART2_IRQ, IRQ_DISABLE);
   if (!empty(&uart_rx_buf)) {
     if (full(&uart_rx_buf)) {
@@ -161,7 +162,7 @@ int uart_get_byte(UNUSED char *c){
     *c = pop(&uart_rx_buf);
     success = 0;
   }
-  nvic_irq(UART2_IRQ, IRQ_ENABLE);
+  restore_interrupt_state(state);
   return success;
 }
 
