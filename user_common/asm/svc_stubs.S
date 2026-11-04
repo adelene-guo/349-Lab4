@@ -61,16 +61,6 @@ _gettimeofday:
 _times:
   bkpt
 
-.global _getpid
-_getpid:
-  svc SVC_GET_PID
-  bx lr
-
-.global _kill
-_kill:
-  svc SVC_KILL
-  bx lr
-
 .global _exit
 _exit:
   svc SVC_EXIT
