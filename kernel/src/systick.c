@@ -44,6 +44,7 @@ struct systick_reg_map {
 /** @brief Global counter of ticks since boot*/
 volatile uint32_t systick_ticks = 0;
 
+
 /** @brief Documents systick init. */
 void systick_init(uint32_t frequency) {
     struct systick_reg_map *systick = SYSTICK_BASE;
@@ -73,5 +74,29 @@ uint32_t systick_get_ticks() {
 void systick_c_handler() {
     systick_ticks++;
     ++g_sys_tick_count;
-    if (g_scheduler_running) pend_pendsv();
+    tcb_t *curr_tcb = g_current_tcb;
+    if (curr_tcb->thread_state==THREAD_RUNNING && //if there is a running thread
+        curr_tcb!=g_idle_tcb && curr!=g_default_tcb) { // non-idle, non-default
+        curr_tcb->curr_tick_count++;
+        curr_tcb->total_tick_count++;
+        if (curr_tcb->curr_tick_count >= curr_tcb->C) { // over computation lim
+            curr_tcb->thread_state=THREAD_WAITING;
+        }
+    }
+
+    for (uint32_t i=0; i<MAX_USER_THREADS; i++) {
+        tcb_t *tcb = &g_tcbs[i];
+        if (tcb->thread_state==THREAD_WAITING && g_sys_tick_count>=tcb->next_wake_up){
+            tcb->thread_state = THREAD_RUNNABLE;
+            tcb->curr_tick_count = 0;
+            tcb->next_wake_up += tcb->T;
+        }
+    }
+    pend_pendsv();
+}
+
+void systick_stop() {
+    struct systick_reg_map *systick = SYSTICK_BASE;
+    systick->STK_CTRL &= ~ENABLE; // disable the enable bit
+    return;
 }

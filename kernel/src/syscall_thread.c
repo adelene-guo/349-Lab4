@@ -10,10 +10,12 @@
 #include <syscall.h>
 
 #define NUM_TCBS THREAD_TCB_COUNT
-#define MAX_USER_THREADS 14
+// #define MAX_USER_THREADS 14 moved to syscall_thread.h
 #define IDLE_THREAD_INDEX 14
 #define DEFAULT_THREAD_INDEX 15
 #define MIN_STACK_WORDS 256
+
+#define SYSTICK_ENABLE 1
 
 float ub_table[] = {
   0.000, 1.000, .8284, .7798, .7568,
@@ -25,10 +27,10 @@ float ub_table[] = {
   .7012, .7009
 };
 
-tcb_t g_tcbs[NUM_TCBS];
-tcb_t *g_current_tcb;
-tcb_t *g_idle_tcb;
-tcb_t *g_default_tcb;
+extern tcb_t g_tcbs[NUM_TCBS];
+extern tcb_t *g_current_tcb;
+extern tcb_t *g_idle_tcb;
+extern tcb_t *g_default_tcb;
 uint32_t g_nonidle_threads_count;
 uint32_t g_max_threads;
 uint32_t g_max_mutexes;
@@ -56,13 +58,33 @@ static bool passes_ub_test(uint32_t new_C, uint32_t new_T) {
 
 /** @brief Picks the next thread to run */
 tcb_t *pick_next_thread(void) {
-  /** round-robin scheduling */
-  uint32_t start = (uint32_t)(g_current_tcb - g_tcbs); // get the index of the current thread
-  for (uint32_t offset = 1; offset <= NUM_TCBS; ++offset) {
-    tcb_t *candidate = &g_tcbs[(start + offset) % NUM_TCBS]; // find next thread with static priority
-    if (candidate->thread_state == THREAD_RUNNABLE) return candidate;
-  }
-  return g_idle_tcb;
+  // /** round-robin scheduling */
+  // uint32_t start = (uint32_t)(g_current_tcb - g_tcbs); // get the index of the current thread
+  // for (uint32_t offset = 1; offset <= NUM_TCBS; ++offset) {
+  //   tcb_t *candidate = &g_tcbs[(start + offset) % NUM_TCBS]; // find next thread with static priority
+  //   if (candidate->thread_state == THREAD_RUNNABLE) return candidate;
+  // }
+  // return g_idle_tcb;
+  tcb_t *best_thread = NULL;
+  for (uint32_t i=0; i<MAX_USER_THREADS; i++){
+    tcb_t *thread = &g_tcbs[i];
+    if (thread==g_idle_tcb || thread==g_default_tcb) continue;
+
+    thread_state_t thread_state = thread->thread_state;
+    if (thread_state!=THREAD_RUNNABLE && thread_state!=THREAD_RUNNING) continue;
+
+    if (best_thread==NULL || 
+        thread->static_priority < best_thread->static_priority) {
+          best_thread = thread;
+        }
+    }
+    
+    if (best_thread!=NULL) return best_thread;
+    
+    systick_stop();
+    g_default_tcb->thread_state = THREAD_RUNNING;
+    g_current_tcb = g_default_tcb;
+    return g_default_tcb;
 }
 
 void *pendsv_c_handler(void *context_ptr) {
@@ -155,6 +177,7 @@ int sys_thread_create(void *fn, uint32_t prio, uint32_t C, uint32_t T, void *var
   tcb->dynamic_priority = (uint8_t)prio;
   tcb->curr_tick_count = 0;
   tcb->total_tick_count = 0;
+  tcb->next_wake_up = g_scheduler_running ? g_sys_tick_count+T : T;
   tcb->held_mutexes = 0;
   tcb->thread_state = THREAD_RUNNABLE;
   ++g_nonidle_threads_count;
@@ -204,7 +227,12 @@ void sys_thread_kill(void) {
   return;
 }
 
-void sys_wait_until_next_period(void) { }
+void sys_wait_until_next_period(void) {
+  int interrupt_state = save_interrupt_state_and_disable();
+  g_current_tcb->thread_state = THREAD_WAITING;
+  pend_pendsv();
+  restore_interrupt_state(interrupt_state);
+ }
 
 kmutex_t *sys_mutex_init(uint32_t max_prio) { (void)max_prio; return NULL; }
 void sys_mutex_lock(kmutex_t *mutex) { (void)mutex; }

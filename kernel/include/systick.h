@@ -24,4 +24,6 @@ uint32_t systick_get_ticks();
 
 void systick_c_handler();
 
+void systick_stop();
+
 #endif /* _SYSTICK_H_ */

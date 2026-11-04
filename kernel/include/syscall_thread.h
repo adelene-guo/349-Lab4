@@ -47,6 +47,9 @@ typedef struct {
   uint32_t held_mutexes; // which mutexes this thread is using (bitmask)
 } tcb_t;
 
+#define MAX_USER_THREADS 14
+
+
 
 /**
  * @brief      The PendSV interrupt handler.
