@@ -15,8 +15,12 @@
 
 typedef enum { THREAD_UNUSED = 0, THREAD_RUNNABLE, THREAD_RUNNING, THREAD_WAITING } thread_state_t;
 
+#define THREAD_TCB_COUNT 16U
+#define THREAD_STACK_SLOTS 15U
+#define THREAD_NO_STACK_SLOT 0xFFU
+
 extern volatile uint32_t g_sys_tick_count;
-extern bool g_scheduler_running;
+extern volatile bool g_scheduler_running;
 
 /**
  * @struct tcb_t
@@ -27,6 +31,7 @@ typedef struct {
   uint32_t *msp_base; // need to recover addr of msp
   uint32_t *psp_base; // need to recover addr of psp
   bool svc_active; // how to know if it’s in kernel or user mode
+  uint8_t stack_slot; // reusable user/kernel stack slice, or THREAD_NO_STACK_SLOT
 
   uint32_t C; // thread’s allowed computation time
   uint32_t T; // thread’s period (how long until runnable again)

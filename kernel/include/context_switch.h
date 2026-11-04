@@ -27,10 +27,6 @@ extern uint32_t __thread_k_stacks_low[];
 /** @brief Documents thread kill. */
 extern void thread_kill(void);
 
-/** @brief Free user stack pointer. */
-extern uint32_t *user_top;
-/** @brief Free kernel stack pointer. */
-extern uint32_t *kernel_top;
 /** @brief Size in words of each thread stack, set by thread_init. */
 extern uint32_t stack_words;
 

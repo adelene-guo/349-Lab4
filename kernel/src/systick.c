@@ -47,8 +47,11 @@ volatile uint32_t systick_ticks = 0;
 /** @brief Documents systick init. */
 void systick_init(uint32_t frequency) {
     struct systick_reg_map *systick = SYSTICK_BASE;
-    if (frequency == 0 || frequency > BASE_FREQ) return;
-    systick->STK_CTRL = 0;
+    if (frequency == 0) { // disable SysTick
+        systick->STK_CTRL = 0;
+        return;
+    }
+    if (frequency > BASE_FREQ) return; // frequency too high
     systick->STK_LOAD = BASE_FREQ / frequency - 1U;
     systick->STK_VAL = 0;
     systick->STK_CTRL = TICKINT | CLKSOURCE | ENABLE;
