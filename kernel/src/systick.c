@@ -76,7 +76,7 @@ void systick_c_handler() {
     ++g_sys_tick_count;
     tcb_t *curr_tcb = g_current_tcb;
     if (curr_tcb->thread_state==THREAD_RUNNING && //if there is a running thread
-        curr_tcb!=g_idle_tcb && curr!=g_default_tcb) { // non-idle, non-default
+        curr_tcb!=g_idle_tcb && curr_tcb!=g_default_tcb) { // non-idle, non-default
         curr_tcb->curr_tick_count++;
         curr_tcb->total_tick_count++;
         if (curr_tcb->curr_tick_count >= curr_tcb->C) { // over computation lim

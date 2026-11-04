@@ -9,7 +9,7 @@
 #include <mpu.h>
 #include <syscall.h>
 
-#define NUM_TCBS THREAD_TCB_COUNT
+// #define NUM_TCBS THREAD_TCB_COUNT
 // #define MAX_USER_THREADS 14 moved to syscall_thread.h
 #define IDLE_THREAD_INDEX 14
 #define DEFAULT_THREAD_INDEX 15
@@ -27,10 +27,11 @@ float ub_table[] = {
   .7012, .7009
 };
 
-extern tcb_t g_tcbs[NUM_TCBS];
-extern tcb_t *g_current_tcb;
-extern tcb_t *g_idle_tcb;
-extern tcb_t *g_default_tcb;
+// moved to header file
+tcb_t g_tcbs[NUM_TCBS];
+tcb_t *g_current_tcb;
+tcb_t *g_idle_tcb;
+tcb_t *g_default_tcb;
 uint32_t g_nonidle_threads_count;
 uint32_t g_max_threads;
 uint32_t g_max_mutexes;

@@ -48,7 +48,11 @@ typedef struct {
 } tcb_t;
 
 #define MAX_USER_THREADS 14
-
+#define NUM_TCBS THREAD_TCB_COUNT
+extern tcb_t g_tcbs[NUM_TCBS];
+extern tcb_t *g_current_tcb;
+extern tcb_t *g_idle_tcb;
+extern tcb_t *g_default_tcb;
 
 
 /**
