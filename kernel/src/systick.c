@@ -10,6 +10,10 @@
 
 #include <unistd.h>
 #include <systick.h>
+#include <arm.h>
+#include <syscall_thread.h>
+
+extern volatile uint32_t g_sys_tick_count;
 
 /** @brief Documents UNUSED. */
 #define UNUSED __attribute__((unused))
@@ -37,21 +41,17 @@ struct systick_reg_map {
 /** @brief COUNTFLAG bit */
 #define COUNTFLAG (1 << 16)
 
-/** @brief RELOAD value for 1 ms tick (RELOAD = 1ms/T_freq - 1)*/
-#define RELOAD 15999
-
 /** @brief Global counter of ticks since boot*/
 volatile uint32_t systick_ticks = 0;
 
 /** @brief Documents systick init. */
-void systick_init() {
+void systick_init(uint32_t frequency) {
     struct systick_reg_map *systick = SYSTICK_BASE;
-
-    systick->STK_LOAD = RELOAD; //set reload value to be loaded
-
-    systick->STK_CTRL |= TICKINT;
-    systick->STK_CTRL |= CLKSOURCE;
-    systick->STK_CTRL |= ENABLE; //load reload val and start timer
+    if (frequency == 0 || frequency > BASE_FREQ) return;
+    systick->STK_CTRL = 0;
+    systick->STK_LOAD = BASE_FREQ / frequency - 1U;
+    systick->STK_VAL = 0;
+    systick->STK_CTRL = TICKINT | CLKSOURCE | ENABLE;
 }
 
 /** @brief Documents systick delay. */
@@ -68,5 +68,7 @@ uint32_t systick_get_ticks() {
 
 /** @brief Documents systick c handler. */
 void systick_c_handler() {
-    systick_ticks++; //increment global tick counter
+    systick_ticks++;
+    ++g_sys_tick_count;
+    if (g_scheduler_running) pend_pendsv();
 }

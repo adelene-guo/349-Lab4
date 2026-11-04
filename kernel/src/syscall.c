@@ -105,5 +105,5 @@ void sys_exit(UNUSED int status){
   uart_flush();
 
   //display the exit code on the screen
-  lcd_print(status_msg);
+  // lcd_print(status_msg);
 }

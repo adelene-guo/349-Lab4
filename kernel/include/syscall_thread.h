@@ -10,7 +10,37 @@
 #ifndef _SYSCALL_THREAD_H_
 #define _SYSCALL_THREAD_H_
 
-#include <unistd.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+typedef enum { THREAD_UNUSED = 0, THREAD_RUNNABLE, THREAD_RUNNING, THREAD_WAITING } thread_state_t;
+
+extern volatile uint32_t g_sys_tick_count;
+extern bool g_scheduler_running;
+
+/**
+ * @struct tcb_t
+ *
+ * @brief  Thread control block structure.
+ */
+typedef struct {
+  uint32_t *msp_base; // need to recover addr of msp
+  uint32_t *psp_base; // need to recover addr of psp
+  bool svc_active; // how to know if it’s in kernel or user mode
+
+  uint32_t C; // thread’s allowed computation time
+  uint32_t T; // thread’s period (how long until runnable again)
+  uint8_t static_priority; // Thread's static priority
+  uint8_t dynamic_priority; // inherited priority for HLP
+
+  uint32_t curr_tick_count; // ticks used by this thread this period
+  uint32_t total_tick_count; // ticks used by this thread ever
+  uint32_t next_wake_up; // when the thread should next be runnable
+
+  thread_state_t thread_state; // state that the thread is in
+  
+  uint32_t held_mutexes; // which mutexes this thread is using (bitmask)
+} tcb_t;
 
 
 /**
@@ -37,12 +67,7 @@ void *pendsv_c_handler( void * );
  *
  * @return     0 on success or -1 on failure
  */
-int sys_thread_init(
-  uint32_t        max_threads,
-  uint32_t        stack_size,
-  void           *idle_fn,
-  uint32_t        max_mutexes
-);
+int sys_thread_init(uint32_t max_threads, uint32_t stack_size, void *idle_fn,uint32_t max_mutexes);
 
 /**
  * @brief      Create a new thread running the given function. The thread will
@@ -73,42 +98,6 @@ int sys_thread_create( void *fn, uint32_t prio, uint32_t C, uint32_t T, void *va
  * @return     0 on success or -1 on failure
  */
 int sys_scheduler_start( uint32_t frequency );
-
-/**
- * @brief      Get the current time.
- *
- * @return     The time in ticks.
- */
-uint32_t sys_get_time( void );
-
-/**
- * @brief      Get the effective priority of the current running thread
- *
- * @return     The thread's effective priority
- */
-uint32_t sys_get_priority( void );
-
-/**
- * @brief      Gets the total elapsed time for the thread (since its first
- *             ever period).
- *
- * @return     The time in ticks.
- */
-uint32_t sys_thread_time( void );
-
-/**
- * @brief      Waits efficiently by descheduling thread.
- */
-void sys_wait_until_next_period( void );
-
-/**
-* @brief      Kills current running thread. Aborts program if current thread is
-*             main thread or the idle thread or if current thread exited
-*             while holding a mutex.
-*
-* @return     Does not return.
-*/
-void sys_thread_kill( void );
 
 /**
  * @brief      Get the current time.

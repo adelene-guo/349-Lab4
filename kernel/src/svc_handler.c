@@ -51,9 +51,8 @@ void svc_c_handler(uint32_t *psp) {
                                     (void *)psp[2], (uint32_t)psp[3]);
       break;
     case SVC_THR_CREATE:
-      return_val = (int)sys_thread_create((uint32_t)psp[0], (uint32_t)psp[1],
-                                    (void *)psp[2], (uint32_t)psp[3],
-                                    (void *) psp[8]);
+      return_val = sys_thread_create((void *)psp[0], psp[1], psp[2], psp[3],
+                                    (void *)psp[8]);
       break;
     case SVC_SCHD_START:
       return_val = (int)sys_scheduler_start((uint32_t)psp[0]);
@@ -76,7 +75,7 @@ void svc_c_handler(uint32_t *psp) {
       return_val = (uint32_t)sys_thread_time();
       break;
     case SVC_MUT_INIT:
-      return_val = (void *)sys_mutex_init((uint32_t)psp[0]);
+      return_val = (int)(uintptr_t)sys_mutex_init(psp[0]);
       break;
     case SVC_MUT_LOK:
       sys_mutex_lock((void *)psp[0]);

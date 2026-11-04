@@ -11,14 +11,14 @@
 #ifndef _SYSTICK_H_
 #define _SYSTICK_H_
 
-#include <unistd.h>
+#include <stdint.h>
 
 /** @brief  The processor frequency (16MHz) */
 #define BASE_FREQ 16000000
 
 void systick_init(uint32_t frequency);
 
-void systick_delay();
+void systick_delay(uint32_t ticks);
 
 uint32_t systick_get_ticks();
 

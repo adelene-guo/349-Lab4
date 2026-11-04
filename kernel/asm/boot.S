@@ -165,7 +165,12 @@ _usage_fault_ :
 
 .thumb_func
 _pend_sv_ :
-  bkpt
+  push {r4-r11, r12, lr}  //callee saved plus alignment padding
+  mov r0, sp              //pass msp to pendsv_c_handler
+  bl pendsv_c_handler
+  mov sp, r0              //switch to thread's kernel stack
+  pop {r4-r11, r12, lr}   //restore callee registers
+  bx lr
 
 .thumb_func
 _spi1_handler:

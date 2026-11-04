@@ -25,6 +25,7 @@
 #include "unistd.h"
 #include "string.h"
 #include "arm.h"
+#include "servok.h"
 
 /** @brief USARTDIV value */
 #define USART_DIV 0x8B
@@ -33,13 +34,13 @@
 int kernel_main( void ) {
   init_349(); // DO NOT REMOVE THIS LINE
   uart_init(USART_DIV);
-  systick_init();
+  systick_init(1000);
   
-  lcd_driver_init();
-  lcd_clear();
-  systick_delay(1000);
+  //lcd_driver_init();
+  //lcd_clear();
+  //systick_delay(1000);
 
-  servo_init();
+  //servo_init();
   enter_user_mode();
 
   return 0;
