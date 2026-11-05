@@ -48,11 +48,11 @@ static bool passes_ub_test(uint32_t new_C, uint32_t new_T) {
   if (new_T == 0) return false;
   float utilization = (float)new_C / (float)new_T;
   uint32_t count = 1;
-  for (uint32_t i = 0; i < MAX_USER_THREADS; ++i) {
+  for (uint32_t i = 0; i < MAX_USER_THREADS; i++) {
     if (g_tcbs[i].thread_state == THREAD_UNUSED) continue;
     if (g_tcbs[i].T == 0) return false;
     utilization += (float)g_tcbs[i].C / (float)g_tcbs[i].T;
-    ++count;
+    count++;
   }
   return count < sizeof(ub_table) / sizeof(ub_table[0]) && utilization <= ub_table[count];
 }
@@ -82,37 +82,43 @@ tcb_t *pick_next_thread(void) {
     
     if (best_thread!=NULL) return best_thread;
     
-    systick_stop();
-    g_default_tcb->thread_state = THREAD_RUNNING;
-    g_current_tcb = g_default_tcb;
-    return g_default_tcb;
+    g_idle_tcb->thread_state = THREAD_RUNNING;
+    g_current_tcb = g_idle_tcb;
+    return g_idle_tcb;
+
 }
 
 void *pendsv_c_handler(void *context_ptr) {
-  tcb_t *prev = g_current_tcb; // save the current thread's context
+  tcb_t *prev = g_current_tcb;
+  // save the current thread's context
   prev->msp_base = context_ptr;
   prev->psp_base = get_psp();
   prev->svc_active = get_svc_status() != 0;
-  if (prev == g_idle_tcb && prev->thread_state == THREAD_UNUSED) { // reinitialize idle thread if it was killed
+  if (prev == g_idle_tcb && prev->thread_state == THREAD_UNUSED) {
+    // reinitialize idle thread if it was killed
     if (init_thread_context(prev, (void *)default_idle, NULL) == 0) {
       prev->static_priority = IDLE_THREAD_INDEX;
       prev->dynamic_priority = IDLE_THREAD_INDEX;
       prev->thread_state = THREAD_RUNNABLE;
     }
-  } else if (prev->thread_state == THREAD_RUNNING && prev != g_default_tcb) { // set running, non-default threads to runnable
+  } else if (prev->thread_state == THREAD_RUNNING && prev != g_default_tcb) {
+    // set running, non-default threads to runnable
     prev->thread_state = THREAD_RUNNABLE;
   }
 
   tcb_t *next;
-  if (g_scheduler_running && g_nonidle_threads_count == 0) { // default thread if no non-idle threads are runnable
+  if (g_scheduler_running && g_nonidle_threads_count == 0) {
+    // default thread if no non-idle threads are runnable
     g_scheduler_running = false;
-    systick_init(0);
+    systick_stop();
     g_default_tcb->thread_state = THREAD_RUNNABLE;
     next = g_default_tcb;
   } else {
-    next = pick_next_thread(); // pick the next thread to run
+    next = pick_next_thread();
+    // pick the next thread to run
   }
-  next->thread_state = THREAD_RUNNING; // set the next thread to running
+  next->thread_state = THREAD_RUNNING;
+  // set the next thread to running
   g_current_tcb = next;
   set_psp(next->psp_base);
   set_svc_status(next->svc_active);
@@ -121,15 +127,18 @@ void *pendsv_c_handler(void *context_ptr) {
 
 int sys_thread_init(uint32_t max_threads, uint32_t stack_size, void *idle_fn,
                     uint32_t max_mutexes) {
-  if (max_threads == 0 || max_threads > MAX_USER_THREADS) return -1; // invalid number of threads
-  uint32_t words = stack_size < MIN_STACK_WORDS ? MIN_STACK_WORDS : stack_size; // ensure minimum stack size
+  if (max_threads == 0 || max_threads > MAX_USER_THREADS) return -1;
+  // invalid number of threads
+  uint32_t words = stack_size < MIN_STACK_WORDS ? MIN_STACK_WORDS : stack_size;
+  // ensure minimum stack size
   words = 1U << mm_log2ceil_size(words);
   uint32_t user_region_words = (uint32_t)(__thread_u_stacks_top - __thread_u_stacks_low);
   uint32_t kernel_region_words = (uint32_t)(__thread_k_stacks_top - __thread_k_stacks_low);
   if ((max_threads + 1U) * words > user_region_words ||
-      (max_threads + 1U) * words > kernel_region_words) return -1; // insufficient memory
-
-  for (uint32_t i = 0; i < NUM_TCBS; ++i) { // initialize all TCBs to unused state
+      (max_threads + 1U) * words > kernel_region_words) return -1;
+      // insufficient memory
+  for (uint32_t i = 0; i < NUM_TCBS; i++) {
+    // initialize all TCBs to unused state
     g_tcbs[i].thread_state = THREAD_UNUSED;
     g_tcbs[i].stack_slot = THREAD_NO_STACK_SLOT;
     g_tcbs[i].msp_base = NULL;
@@ -151,8 +160,10 @@ int sys_thread_init(uint32_t max_threads, uint32_t stack_size, void *idle_fn,
   g_default_tcb = &g_tcbs[DEFAULT_THREAD_INDEX];
   g_current_tcb = g_default_tcb;
 
-  void *idle = idle_fn != NULL ? idle_fn : (void *)default_idle; // use default idle function if none provided
-  if (init_thread_context(g_idle_tcb, idle, NULL) != 0) return -1; // failed to initialize idle thread context
+  void *idle = idle_fn != NULL ? idle_fn : (void *)default_idle;
+  // use default idle function if none provided
+  if (init_thread_context(g_idle_tcb, idle, NULL) != 0) return -1;
+  // failed to initialize idle thread context
   g_idle_tcb->static_priority = IDLE_THREAD_INDEX;
   g_idle_tcb->dynamic_priority = IDLE_THREAD_INDEX;
   g_idle_tcb->thread_state = THREAD_RUNNABLE;
@@ -181,7 +192,7 @@ int sys_thread_create(void *fn, uint32_t prio, uint32_t C, uint32_t T, void *var
   tcb->next_wake_up = g_scheduler_running ? g_sys_tick_count+T : T;
   tcb->held_mutexes = 0;
   tcb->thread_state = THREAD_RUNNABLE;
-  ++g_nonidle_threads_count;
+  g_nonidle_threads_count++;
   bool scheduler_running = g_scheduler_running;
   restore_interrupt_state(interrupt_state);
   if (scheduler_running) pend_pendsv(); // trigger context switch
@@ -229,8 +240,12 @@ void sys_thread_kill(void) {
 }
 
 void sys_wait_until_next_period(void) {
+  if (!g_scheduler_running || g_current_tcb == NULL ||
+      g_current_tcb == g_idle_tcb || g_current_tcb == g_default_tcb) return;
+
   int interrupt_state = save_interrupt_state_and_disable();
   g_current_tcb->thread_state = THREAD_WAITING;
+  g_current_tcb->next_wake_up += g_current_tcb->T;
   pend_pendsv();
   restore_interrupt_state(interrupt_state);
  }

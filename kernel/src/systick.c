@@ -73,7 +73,9 @@ uint32_t systick_get_ticks() {
 /** @brief Documents systick c handler. */
 void systick_c_handler() {
     systick_ticks++;
-    ++g_sys_tick_count;
+    if (!g_scheduler_running) return;
+
+    g_sys_tick_count++;
     tcb_t *curr_tcb = g_current_tcb;
     if (curr_tcb->thread_state==THREAD_RUNNING && //if there is a running thread
         curr_tcb!=g_idle_tcb && curr_tcb!=g_default_tcb) { // non-idle, non-default
