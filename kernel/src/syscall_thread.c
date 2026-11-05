@@ -66,23 +66,16 @@ tcb_t *pick_next_thread(void) {
   //   if (candidate->thread_state == THREAD_RUNNABLE) return candidate;
   // }
   // return g_idle_tcb;
-  tcb_t *best_thread = NULL;
   for (uint32_t i=0; i<MAX_USER_THREADS; i++){
     tcb_t *thread = &g_tcbs[i];
     if (thread==g_idle_tcb || thread==g_default_tcb) continue;
 
     thread_state_t thread_state = thread->thread_state;
-    if (thread_state!=THREAD_RUNNABLE && thread_state!=THREAD_RUNNING) continue;
+    if (thread_state==THREAD_RUNNABLE || thread_state==THREAD_RUNNING) return thread;
 
-    if (best_thread==NULL || 
-        thread->static_priority < best_thread->static_priority) {
-          best_thread = thread;
-        }
-    }
-    
-    if (best_thread!=NULL) return best_thread;
-    
-    g_idle_tcb->thread_state = THREAD_RUNNING;
+  }
+
+    g_idle_tcb->thread_state = THREAD_RUNNING; //no other runnable threads
     g_current_tcb = g_idle_tcb;
     return g_idle_tcb;
 
@@ -245,7 +238,6 @@ void sys_wait_until_next_period(void) {
 
   int interrupt_state = save_interrupt_state_and_disable();
   g_current_tcb->thread_state = THREAD_WAITING;
-  g_current_tcb->next_wake_up += g_current_tcb->T;
   pend_pendsv();
   restore_interrupt_state(interrupt_state);
  }

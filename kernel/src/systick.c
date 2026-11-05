@@ -13,8 +13,6 @@
 #include <arm.h>
 #include <syscall_thread.h>
 
-extern volatile uint32_t g_sys_tick_count;
-
 /** @brief Documents UNUSED. */
 #define UNUSED __attribute__((unused))
 
@@ -41,9 +39,6 @@ struct systick_reg_map {
 /** @brief COUNTFLAG bit */
 #define COUNTFLAG (1 << 16)
 
-/** @brief Global counter of ticks since boot*/
-volatile uint32_t systick_ticks = 0;
-
 
 /** @brief Documents systick init. */
 void systick_init(uint32_t frequency) {
@@ -67,15 +62,13 @@ void systick_delay(uint32_t ticks) {
 
 /** @brief Documents systick get ticks. */
 uint32_t systick_get_ticks() {
-    return systick_ticks; //return global tick counter
+    return g_sys_tick_count; //return global tick counter
 }
 
 /** @brief Documents systick c handler. */
 void systick_c_handler() {
-    systick_ticks++;
-    if (!g_scheduler_running) return;
-
     g_sys_tick_count++;
+    if (!g_scheduler_running) return;
     tcb_t *curr_tcb = g_current_tcb;
     if (curr_tcb->thread_state==THREAD_RUNNING && //if there is a running thread
         curr_tcb!=g_idle_tcb && curr_tcb!=g_default_tcb) { // non-idle, non-default
