@@ -99,7 +99,7 @@ tcb_t *pick_next_thread(void) {
   //   g_current_tcb = g_idle_tcb;
   //   return g_idle_tcb;
 
-}
+// }
 
 void *pendsv_c_handler(void *context_ptr) {
   tcb_t *prev = g_current_tcb;
