@@ -74,8 +74,8 @@ tcb_t *pick_next_thread(void) {
       best_prio = thread->dynamic_priority;
     }
   }
+  
   return best;
-}
 
   // /** round-robin scheduling */
   // uint32_t start = (uint32_t)(g_current_tcb - g_tcbs); // get the index of the current thread
@@ -262,7 +262,7 @@ void sys_thread_kill(void) {
 
   int interrupt_state = save_interrupt_state_and_disable();
   if (g_current_tcb->held_mutexes != 0) {
-    printk("Thread waiting while holding mutexes");
+    printk("ERROR: Thread waiting while holding mutexes\n");
   }
   g_current_tcb->thread_state = THREAD_WAITING;
   pend_pendsv();
@@ -283,19 +283,19 @@ void sys_mutex_lock(kmutex_t *mutex) {
   int interrupt_state = save_interrupt_state_and_disable();
 
   if (mutex->locked_by == g_current_tcb->static_priority){
-    printk("Mutex already locked");
+    printk("ERROR: Mutex already locked\n");
     restore_interrupt_state(interrupt_state);
     return;
   }
 
   if (g_current_tcb == g_idle_tcb) {
-    printk("Mutex used by idle thread");
+    printk("ERROR:Mutex used by idle thread\n");
     restore_interrupt_state(interrupt_state);
     return;
   }
 
   if (g_current_tcb->static_priority < mutex->prio_ceil) {
-    printk("Mutex ceiling violated");
+    printk("ERROR: Mutex ceiling violated\n");
     restore_interrupt_state(interrupt_state);
     sys_thread_kill();
     return;
@@ -308,8 +308,10 @@ void sys_mutex_lock(kmutex_t *mutex) {
   }
 
   mutex->locked_by = g_current_tcb->static_priority;
-  g_current_tcb->held_mutexes |= bit(mutex->index);
-  g_current_tcb->dynamic_priority = min(g_current_tcb->dynamic_priority, mutex->prio_ceil);
+  g_current_tcb->held_mutexes |= 1 << mutex->index;
+  if (g_current_tcb->dynamic_priority > mutex->prio_ceil) {
+    g_current_tcb->dynamic_priority = mutex->prio_ceil;
+  }
   restore_interrupt_state(interrupt_state);
   return;
 
@@ -319,24 +321,26 @@ void sys_mutex_unlock(kmutex_t *mutex) {
   int interrupt_state = save_interrupt_state_and_disable();
 
   if (mutex->locked_by == NOT_LOCKED) {
-    printk("Mutex is not locked");
+    printk("ERROR: Mutex is not locked\n");
     restore_interrupt_state(interrupt_state);
     return;
   }
 
   if (mutex->locked_by != g_current_tcb->static_priority) {
-    printk("Mutex is not in thread's control");
+    printk("ERROR:Mutex is not in thread's control\n");
     restore_interrupt_state(interrupt_state);
     return;
   }
 
   mutex->locked_by = NOT_LOCKED;
-  g_current_tcb->held_mutexes &= ~bit(mutex->index);
+  g_current_tcb->held_mutexes &= ~(1 << mutex->index);
   g_current_tcb->dynamic_priority = g_current_tcb->static_priority;
-  for (int i = 0; i < g_max_mutexes; i++) {
+  for (uint32_t i = 0; i < g_max_mutexes; i++) {
     bool thread_owns_mutex = (g_current_tcb->held_mutexes >> i) & 1;
     if (thread_owns_mutex) {
-      g_current_tcb->dynamic_priority = min(g_current_tcb->dynamic_priority, mutexes[i].prio_ceil);
+      if (g_current_tcb->dynamic_priority > mutexes[i].prio_ceil) {
+        g_current_tcb->dynamic_priority = mutexes[i].prio_ceil;
+      }
     }
   }
   pend_pendsv();
