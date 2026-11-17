@@ -99,7 +99,7 @@ tcb_t *pick_next_thread(void) {
   //   g_current_tcb = g_idle_tcb;
   //   return g_idle_tcb;
 
-}
+// }
 
 void *pendsv_c_handler(void *context_ptr) {
   tcb_t *prev = g_current_tcb;
@@ -308,8 +308,9 @@ void sys_mutex_lock(kmutex_t *mutex) {
   }
 
   mutex->locked_by = g_current_tcb->static_priority;
-  g_current_tcb->held_mutexes |= bit(mutex->index);
-  g_current_tcb->dynamic_priority = min(g_current_tcb->dynamic_priority, mutex->prio_ceil);
+  g_current_tcb->held_mutexes |= 1<< (mutex->index);
+  // g_current_tcb->dynamic_priority = min(g_current_tcb->dynamic_priority, mutex->prio_ceil);
+  g_current_tcb->dynamic_priority = (g_current_tcb->dynamic_priority<mutex->prio_ceil) ? g_current_tcb->dynamic_priority : mutex->prio_ceil;
   restore_interrupt_state(interrupt_state);
   return;
 
@@ -331,12 +332,13 @@ void sys_mutex_unlock(kmutex_t *mutex) {
   }
 
   mutex->locked_by = NOT_LOCKED;
-  g_current_tcb->held_mutexes &= ~bit(mutex->index);
+  g_current_tcb->held_mutexes &= ~(1<<(mutex->index));
   g_current_tcb->dynamic_priority = g_current_tcb->static_priority;
-  for (int i = 0; i < g_max_mutexes; i++) {
+  for (uint32_t i = 0; i < g_max_mutexes; i++) {
     bool thread_owns_mutex = (g_current_tcb->held_mutexes >> i) & 1;
     if (thread_owns_mutex) {
-      g_current_tcb->dynamic_priority = min(g_current_tcb->dynamic_priority, mutexes[i].prio_ceil);
+      // g_current_tcb->dynamic_priority = min(g_current_tcb->dynamic_priority, mutexes[i].prio_ceil);
+      g_current_tcb->dynamic_priority = (g_current_tcb->dynamic_priority<mutexes[i].prio_ceil) ? g_current_tcb->dynamic_priority : mutexes[i].prio_ceil;
     }
   }
   pend_pendsv();
