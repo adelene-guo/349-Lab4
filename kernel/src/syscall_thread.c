@@ -8,6 +8,7 @@
 #include <systick.h>
 #include <mpu.h>
 #include <syscall.h>
+#include <printk.h>
 
 // #define NUM_TCBS THREAD_TCB_COUNT
 // #define MAX_USER_THREADS 14 moved to syscall_thread.h
@@ -41,6 +42,9 @@ uint32_t g_scheduler_freq;
 volatile uint32_t g_sys_tick_count;
 uint32_t stack_words;
 
+uint32_t volatile mutex_index;
+kmutex_t mutexes[MAX_MUTEX];
+
 extern void default_idle(void);
 
 /** @brief Checks if a thread passes the utilization bound test */
@@ -59,25 +63,41 @@ static bool passes_ub_test(uint32_t new_C, uint32_t new_T) {
 
 /** @brief Picks the next thread to run */
 tcb_t *pick_next_thread(void) {
+  tcb_t *best = g_idle_tcb;
+  uint32_t best_prio = IDLE_THREAD_INDEX;
+  for (uint32_t i = 0; i < MAX_USER_THREADS; i++) {
+    tcb_t *thread = &g_tcbs[i];
+    if (thread->thread_state != THREAD_RUNNABLE &&
+        thread->thread_state != THREAD_RUNNING) continue;
+    if (thread->dynamic_priority <= best_prio) {
+      best = thread;
+      best_prio = thread->dynamic_priority;
+    }
+  }
+  return best;
+}
+
   // /** round-robin scheduling */
   // uint32_t start = (uint32_t)(g_current_tcb - g_tcbs); // get the index of the current thread
   // for (uint32_t offset = 1; offset <= NUM_TCBS; ++offset) {
   //   tcb_t *candidate = &g_tcbs[(start + offset) % NUM_TCBS]; // find next thread with static priority
   //   if (candidate->thread_state == THREAD_RUNNABLE) return candidate;
   // }
+
   // return g_idle_tcb;
-  for (uint32_t i=0; i<MAX_USER_THREADS; i++){
-    tcb_t *thread = &g_tcbs[i];
-    if (thread==g_idle_tcb || thread==g_default_tcb) continue;
+  // /** rms scheduling */
+  // for (uint32_t i=0; i<MAX_USER_THREADS; i++){
+  //   tcb_t *thread = &g_tcbs[i];
+  //   if (thread==g_idle_tcb || thread==g_default_tcb) continue;
 
-    thread_state_t thread_state = thread->thread_state;
-    if (thread_state==THREAD_RUNNABLE || thread_state==THREAD_RUNNING) return thread;
+  //   thread_state_t thread_state = thread->thread_state;
+  //   if (thread_state==THREAD_RUNNABLE || thread_state==THREAD_RUNNING) return thread;
 
-  }
+  // }
 
-    g_idle_tcb->thread_state = THREAD_RUNNING; //no other runnable threads
-    g_current_tcb = g_idle_tcb;
-    return g_idle_tcb;
+  //   g_idle_tcb->thread_state = THREAD_RUNNING; //no other runnable threads
+  //   g_current_tcb = g_idle_tcb;
+  //   return g_idle_tcb;
 
 }
 
@@ -125,6 +145,7 @@ int sys_thread_init(uint32_t max_threads, uint32_t stack_size, void *idle_fn,
   uint32_t words = stack_size < MIN_STACK_WORDS ? MIN_STACK_WORDS : stack_size;
   // ensure minimum stack size
   words = 1U << mm_log2ceil_size(words);
+  mutex_index = 0;
   uint32_t user_region_words = (uint32_t)(__thread_u_stacks_top - __thread_u_stacks_low);
   uint32_t kernel_region_words = (uint32_t)(__thread_k_stacks_top - __thread_k_stacks_low);
   if ((max_threads + 1U) * words > user_region_words ||
@@ -225,6 +246,9 @@ void sys_thread_kill(void) {
   int interrupt_state = save_interrupt_state_and_disable(); //kill a normal thread and reschedule
   g_current_tcb->thread_state = THREAD_UNUSED;
   g_current_tcb->stack_slot = THREAD_NO_STACK_SLOT;
+  for (uint32_t i = 0; i < g_max_mutexes; i++) {
+    if ((g_current_tcb->held_mutexes >> i) & 1) mutexes[i].locked_by = NOT_LOCKED;
+  }
   g_current_tcb->held_mutexes = 0;
   if (g_nonidle_threads_count != 0) --g_nonidle_threads_count;
   pend_pendsv();
@@ -232,16 +256,90 @@ void sys_thread_kill(void) {
   return;
 }
 
-void sys_wait_until_next_period(void) {
+ void sys_wait_until_next_period(void) {
   if (!g_scheduler_running || g_current_tcb == NULL ||
       g_current_tcb == g_idle_tcb || g_current_tcb == g_default_tcb) return;
 
   int interrupt_state = save_interrupt_state_and_disable();
+  if (g_current_tcb->held_mutexes != 0) {
+    printk("Thread waiting while holding mutexes");
+  }
   g_current_tcb->thread_state = THREAD_WAITING;
   pend_pendsv();
   restore_interrupt_state(interrupt_state);
- }
+}
 
-kmutex_t *sys_mutex_init(uint32_t max_prio) { (void)max_prio; return NULL; }
-void sys_mutex_lock(kmutex_t *mutex) { (void)mutex; }
-void sys_mutex_unlock(kmutex_t *mutex) { (void)mutex; }
+kmutex_t *sys_mutex_init(uint32_t max_prio) {
+  if (mutex_index >= g_max_mutexes) return NULL;
+  kmutex_t *new_mutex = &mutexes[mutex_index];
+  new_mutex->locked_by = NOT_LOCKED;
+  new_mutex->prio_ceil = max_prio;
+  new_mutex->index = mutex_index;
+  mutex_index++;
+  return new_mutex;
+}
+
+void sys_mutex_lock(kmutex_t *mutex) {
+  int interrupt_state = save_interrupt_state_and_disable();
+
+  if (mutex->locked_by == g_current_tcb->static_priority){
+    printk("Mutex already locked");
+    restore_interrupt_state(interrupt_state);
+    return;
+  }
+
+  if (g_current_tcb == g_idle_tcb) {
+    printk("Mutex used by idle thread");
+    restore_interrupt_state(interrupt_state);
+    return;
+  }
+
+  if (g_current_tcb->static_priority < mutex->prio_ceil) {
+    printk("Mutex ceiling violated");
+    restore_interrupt_state(interrupt_state);
+    sys_thread_kill();
+    return;
+  }
+
+  while (mutex->locked_by != NOT_LOCKED) {
+    pend_pendsv();
+    restore_interrupt_state(interrupt_state);
+    interrupt_state = save_interrupt_state_and_disable();
+  }
+
+  mutex->locked_by = g_current_tcb->static_priority;
+  g_current_tcb->held_mutexes |= bit(mutex->index);
+  g_current_tcb->dynamic_priority = min(g_current_tcb->dynamic_priority, mutex->prio_ceil);
+  restore_interrupt_state(interrupt_state);
+  return;
+
+}
+
+void sys_mutex_unlock(kmutex_t *mutex) {
+  int interrupt_state = save_interrupt_state_and_disable();
+
+  if (mutex->locked_by == NOT_LOCKED) {
+    printk("Mutex is not locked");
+    restore_interrupt_state(interrupt_state);
+    return;
+  }
+
+  if (mutex->locked_by != g_current_tcb->static_priority) {
+    printk("Mutex is not in thread's control");
+    restore_interrupt_state(interrupt_state);
+    return;
+  }
+
+  mutex->locked_by = NOT_LOCKED;
+  g_current_tcb->held_mutexes &= ~bit(mutex->index);
+  g_current_tcb->dynamic_priority = g_current_tcb->static_priority;
+  for (int i = 0; i < g_max_mutexes; i++) {
+    bool thread_owns_mutex = (g_current_tcb->held_mutexes >> i) & 1;
+    if (thread_owns_mutex) {
+      g_current_tcb->dynamic_priority = min(g_current_tcb->dynamic_priority, mutexes[i].prio_ceil);
+    }
+  }
+  pend_pendsv();
+  restore_interrupt_state(interrupt_state);
+  return;
+}

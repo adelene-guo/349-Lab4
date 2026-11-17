@@ -11,6 +11,9 @@
 #define _SYSCALL_MUTEX_H_
 
 #include <unistd.h>
+
+#define MAX_MUTEX 32
+#define NOT_LOCKED 16
 /**
  * @brief      The struct for a mutex.
  */
@@ -20,6 +23,7 @@ typedef struct {
   volatile uint32_t index;      /** @brief index of the mutex in the global mutex array*/
 } kmutex_t;
 
+extern kmutex_t mutexes[MAX_MUTEX];
 
 /**
  * @brief      Used to create a mutex object. The mutex resides in kernel

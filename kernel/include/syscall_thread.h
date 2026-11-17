@@ -15,9 +15,9 @@
 
 typedef enum { THREAD_UNUSED = 0, THREAD_RUNNABLE, THREAD_RUNNING, THREAD_WAITING } thread_state_t;
 
-#define THREAD_TCB_COUNT 16U
-#define THREAD_STACK_SLOTS 15U
-#define THREAD_NO_STACK_SLOT 0xFFU
+#define THREAD_TCB_COUNT 16
+#define THREAD_STACK_SLOTS 15
+#define THREAD_NO_STACK_SLOT 0xFF
 
 extern volatile uint32_t g_sys_tick_count;
 extern volatile bool g_scheduler_running;

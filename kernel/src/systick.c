@@ -12,6 +12,7 @@
 #include <systick.h>
 #include <arm.h>
 #include <syscall_thread.h>
+#include <printk.h>
 
 /** @brief Documents UNUSED. */
 #define UNUSED __attribute__((unused))
@@ -75,6 +76,9 @@ void systick_c_handler() {
         curr_tcb->curr_tick_count++;
         curr_tcb->total_tick_count++;
         if (curr_tcb->curr_tick_count >= curr_tcb->C) { // over computation lim
+            if (curr_tcb->held_mutexes != 0) {
+                printk("Computation time ran up while holding mutexes");
+            }
             curr_tcb->thread_state=THREAD_WAITING;
         }
     }
