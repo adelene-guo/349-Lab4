@@ -69,7 +69,7 @@ tcb_t *pick_next_thread(void) {
     tcb_t *thread = &g_tcbs[i];
     if (thread->thread_state != THREAD_RUNNABLE &&
         thread->thread_state != THREAD_RUNNING) continue;
-    if (thread->dynamic_priority <= best_prio) {
+    if (thread->dynamic_priority <= best_prio) { //run thread with higher dynamic priority
       best = thread;
       best_prio = thread->dynamic_priority;
     }
@@ -99,7 +99,7 @@ tcb_t *pick_next_thread(void) {
   //   g_current_tcb = g_idle_tcb;
   //   return g_idle_tcb;
 
-// }
+ }
 
 void *pendsv_c_handler(void *context_ptr) {
   tcb_t *prev = g_current_tcb;
@@ -301,13 +301,13 @@ void sys_mutex_lock(kmutex_t *mutex) {
     return;
   }
 
-  while (mutex->locked_by != NOT_LOCKED) {
+  while (mutex->locked_by != NOT_LOCKED) { //let owner thread finish using mutex
     pend_pendsv();
     restore_interrupt_state(interrupt_state);
     interrupt_state = save_interrupt_state_and_disable();
   }
 
-  mutex->locked_by = g_current_tcb->static_priority;
+  mutex->locked_by = g_current_tcb->static_priority; //allow current thread to lock mutex
   g_current_tcb->held_mutexes |= 1 << mutex->index;
   if (g_current_tcb->dynamic_priority > mutex->prio_ceil) {
     g_current_tcb->dynamic_priority = mutex->prio_ceil;
@@ -327,18 +327,18 @@ void sys_mutex_unlock(kmutex_t *mutex) {
   }
 
   if (mutex->locked_by != g_current_tcb->static_priority) {
-    printk("ERROR:Mutex is not in thread's control\n");
+    printk("ERROR: Mutex is not in thread's control\n");
     restore_interrupt_state(interrupt_state);
     return;
   }
 
-  mutex->locked_by = NOT_LOCKED;
+  mutex->locked_by = NOT_LOCKED; //let go of mutex
   g_current_tcb->held_mutexes &= ~(1 << mutex->index);
   g_current_tcb->dynamic_priority = g_current_tcb->static_priority;
   for (uint32_t i = 0; i < g_max_mutexes; i++) {
     bool thread_owns_mutex = (g_current_tcb->held_mutexes >> i) & 1;
     if (thread_owns_mutex) {
-      if (g_current_tcb->dynamic_priority > mutexes[i].prio_ceil) {
+      if (g_current_tcb->dynamic_priority > mutexes[i].prio_ceil) { //update dynamic priority
         g_current_tcb->dynamic_priority = mutexes[i].prio_ceil;
       }
     }
